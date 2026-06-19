@@ -1,0 +1,8 @@
+{
+  "name": "EWC 2K26 SIMULATOR",
+  "description": "Um simulador interativo de sorteio de grupos para o campeonato EWC Free Fire, com restrições de potes e times da mesma linha.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
