@@ -196,6 +196,7 @@ export const DEFAULT_POOLS: Pool[] = [
         textColor: "text-amber-100",
         borderColor: "border-amber-400",
         initials: "APX",
+        logoUrl: "https://i.ibb.co/TB4wrtzP/APEX.png",
       },
       {
         id: "team-s8ul",
