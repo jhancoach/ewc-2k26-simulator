@@ -613,6 +613,87 @@ export default function App() {
 
         </div>
 
+        {/* Visão de Todos os Potes Expandidos */}
+        <div className="mt-12 bg-[#100C0B]/90 border border-[#1C1613] p-5 sm:p-6 rounded-3xl backdrop-blur-md shadow-[0_0_35px_rgba(0,0,0,0.5)] w-full relative">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-[#FF5000]/3 to-transparent pointer-events-none" />
+          
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 pb-4 border-b border-[#241A16] gap-4">
+            <div>
+              <h2 className="text-base sm:text-lg font-black tracking-widest text-[#FFD000] uppercase flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded bg-[#FFD000] rotate-45" />
+                📋 Panorama Geral de Todos os Potes ({pools.length} Potes)
+              </h2>
+              <p className="text-xs text-neutral-400 mt-1 font-semibold leading-normal">
+                Acompanhe de forma ampla e direta a distribuição e o sorteio de todas as equipes nos 12 potes de sementes sem precisar de barras de rolagem.
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-[11px] font-black text-neutral-400 tracking-wider font-mono bg-[#0D0A09]/80 border border-[#241A16] px-3 py-1.5 rounded-lg">
+                EQUIPES RESTANTES NOS POTES: <span className="text-[#FF5000] font-bold">{pools.reduce((acc, p) => acc + p.teams.length, 0)} / 24</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+            {pools.map((pool, idx) => {
+              const isCurrentDraw = idx === nextPoolIndexToDraw;
+              const isEmpty = pool.teams.length === 0;
+              
+              return (
+                <div 
+                  key={`expanded-${pool.id}`} 
+                  className={`bg-[#0C0908]/90 border rounded-2xl p-3.5 flex flex-col gap-3 min-h-[145px] transition-all duration-300 ${
+                    isCurrentDraw && !allPlaced 
+                      ? 'border-[#FF5000]/80 bg-[#16100E]/95 shadow-[0_0_20px_rgba(255,80,0,0.2)] scale-[1.02]' 
+                      : 'border-[#1C1613] hover:border-[#FF5000]/40'
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                  onDrop={(e) => handleDropToPool(e, pool.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[10px] font-black tracking-widest uppercase ${
+                      isCurrentDraw && !allPlaced ? 'text-[#FFD000]' : isEmpty ? 'text-neutral-600' : 'text-neutral-400'
+                    }`}>
+                      {pool.name}
+                    </span>
+                    {pool.teams.length >= 2 && (
+                      <button
+                        onClick={() => handleSwapPoolTeams(pool.id)}
+                        title="Inverter ordem das equipes"
+                        className="py-1 px-1.5 rounded bg-[#1D1411] border border-[#2D211C] hover:border-[#FF5000] hover:text-[#FFD000] text-neutral-400 text-[9px] font-bold font-mono transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+                      >
+                        <span>⇅ Inverter</span>
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col gap-2 flex-1 relative min-h-[50px]">
+                    {pool.teams.map((team, tIdx) => (
+                      <TeamCard 
+                        key={`expanded-${team.id}`} 
+                        team={team} 
+                        sourceType="pool" 
+                        sourceId={pool.id} 
+                        onDragStart={handleDragStart} 
+                        badge={`${tIdx + 1}º`}
+                      />
+                    ))}
+                    
+                    {isEmpty && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-xl border border-dashed border-[#1E1512]/40">
+                        <span className="text-neutral-600 font-mono font-black uppercase text-[10px] tracking-widest flex items-center gap-1.5">
+                          <span>✅</span> Sorteado
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {loudGroupTeams.length > 0 && (
           <div className="mt-8 w-full">
             <MapDropSimulator loudGroupTeams={loudGroupTeams} />
