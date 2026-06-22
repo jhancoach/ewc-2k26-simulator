@@ -85,14 +85,14 @@ const TeamCard = ({ team, sourceType, sourceId, onDragStart, badge }: { team: Te
 }
 
 export default function App() {
-  const [activeMode, setActiveMode] = useState<'official' | 'prototype'>('official');
+  const [activeMode, setActiveMode] = useState<'official' | 'prototype'>('prototype');
 
   const initialPoolsForMode = useCallback((mode: 'official' | 'prototype') => {
     const source = mode === 'official' ? DEFAULT_POOLS : PROTOTYPE_POOLS;
     return source.filter(p => p.isActive).map(p => ({ ...p, teams: [...p.teams] }));
   }, []);
 
-  const [pools, setPools] = useState<Pool[]>(() => initialPoolsForMode('official'));
+  const [pools, setPools] = useState<Pool[]>(() => initialPoolsForMode('prototype'));
   const [groups, setGroups] = useState<Group[]>([
     { id: 'A', name: 'GROUP A', teams: [] },
     { id: 'B', name: 'GROUP B', teams: [] },
@@ -112,7 +112,7 @@ export default function App() {
   }, []);
 
   const [customTeamToPoolId, setCustomTeamToPoolId] = useState<Record<string, string>>(() => 
-    getOriginalTeamToPoolMap('official')
+    getOriginalTeamToPoolMap('prototype')
   );
 
   const handleModeChange = (mode: 'official' | 'prototype') => {
@@ -379,16 +379,6 @@ export default function App() {
         <div className="flex justify-center mb-10">
           <div className="inline-flex bg-[#0C0908] border border-[#1E1512] p-1.5 rounded-2xl gap-2 backdrop-blur-md shadow-lg relative">
             <button
-              onClick={() => handleModeChange('official')}
-              className={`group relative cursor-pointer font-black text-xs sm:text-sm tracking-widest uppercase transition-all duration-300 px-5 sm:px-6 py-2.5 rounded-xl flex items-center gap-1.5 focus:outline-none ${
-                activeMode === 'official'
-                  ? 'bg-gradient-to-r from-[#FF5000] to-[#FF8000] text-black font-extrabold shadow-[0_0_20px_rgba(255,80,0,0.25)] scale-[1.02]'
-                  : 'text-neutral-400 hover:text-white hover:bg-[#150F0D]'
-              }`}
-            >
-              <span>🏁 Sorteio Oficial (EWC)</span>
-            </button>
-            <button
               onClick={() => handleModeChange('prototype')}
               className={`group relative cursor-pointer font-black text-xs sm:text-sm tracking-widest uppercase transition-all duration-300 px-5 sm:px-6 py-2.5 rounded-xl flex items-center gap-1.5 focus:outline-none ${
                 activeMode === 'prototype'
@@ -397,6 +387,16 @@ export default function App() {
               }`}
             >
               <span>🧪 Simulação Protótipo</span>
+            </button>
+            <button
+              onClick={() => handleModeChange('official')}
+              className={`group relative cursor-pointer font-black text-xs sm:text-sm tracking-widest uppercase transition-all duration-300 px-5 sm:px-6 py-2.5 rounded-xl flex items-center gap-1.5 focus:outline-none ${
+                activeMode === 'official'
+                  ? 'bg-gradient-to-r from-[#FF5000] to-[#FF8000] text-black font-extrabold shadow-[0_0_20px_rgba(255,80,0,0.25)] scale-[1.02]'
+                  : 'text-neutral-400 hover:text-white hover:bg-[#150F0D]'
+              }`}
+            >
+              <span>🏁 Sorteio Oficial (EWC)</span>
             </button>
           </div>
         </div>
