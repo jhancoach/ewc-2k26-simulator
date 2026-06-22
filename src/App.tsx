@@ -38,7 +38,7 @@ const solveDraw = (teamsToPlace: Team[], currentGroups: Group[], teamToPoolId: R
   return null;
 };
 
-const TeamCard = ({ team, sourceType, sourceId, onDragStart }: { team: Team, sourceType: 'pool' | 'group', sourceId: string, onDragStart: (e: DragEvent, team: Team, sourceId: string, sourceType: 'pool' | 'group') => void, key?: string }) => {
+const TeamCard = ({ team, sourceType, sourceId, onDragStart, badge }: { team: Team, sourceType: 'pool' | 'group', sourceId: string, onDragStart: (e: DragEvent, team: Team, sourceId: string, sourceType: 'pool' | 'group') => void, key?: string, badge?: string }) => {
   return (
     <motion.div
       layoutId={team.id}
@@ -47,6 +47,12 @@ const TeamCard = ({ team, sourceType, sourceId, onDragStart }: { team: Team, sou
       className="group relative flex items-center bg-black border border-neutral-800 rounded-xl p-2 cursor-grab active:cursor-grabbing hover:border-[#FF5000]/50 hover:shadow-[0_0_15px_rgba(255,80,0,0.15)] transition-all overflow-hidden bg-opacity-90 backdrop-blur-sm z-10"
     >
       <div className={`absolute top-0 left-0 bottom-0 w-1.5 bg-gradient-to-b ${team.logoBg}`} />
+
+      {badge && (
+        <div className="absolute top-0 right-0 bg-neutral-900 border-l border-b border-neutral-800 text-[#FFD000] font-mono font-black text-[9px] px-2 py-0.5 rounded-bl shadow-sm z-20">
+          {badge}
+        </div>
+      )}
 
       <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-neutral-900 flex items-center justify-center text-sm sm:text-lg font-bold ml-2 border border-neutral-800 overflow-hidden relative shadow-inner">
         <div className={`absolute inset-0 opacity-20 bg-gradient-to-br ${team.logoBg}`} />
@@ -148,6 +154,18 @@ export default function App() {
 
     setGroups(result);
     setPools(pools.map(p => ({ ...p, teams: [] })));
+  };
+
+  const handleSwapPoolTeams = (poolId: string) => {
+    setPools(prev => prev.map(p => {
+      if (p.id !== poolId) return p;
+      if (p.teams.length < 2) return p;
+      const [first, second] = p.teams;
+      return {
+        ...p,
+        teams: [second, first]
+      };
+    }));
   };
 
   const allPlaced = pools.every(p => p.teams.length === 0);
@@ -433,20 +451,30 @@ export default function App() {
                   onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
                   onDrop={(e) => handleDropToPool(e, pool.id)}
                 >
-                  <div className="flex items-center justify-between pointer-events-none">
-                    <div className={`text-xs font-black tracking-widest uppercase ${isCurrentDraw && !allPlaced ? 'text-[#FFD000]' : isEmpty ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className={`text-xs font-black tracking-widest uppercase select-none pointer-events-none ${isCurrentDraw && !allPlaced ? 'text-[#FFD000]' : isEmpty ? 'text-neutral-600' : 'text-neutral-400'}`}>
                       {pool.name}
                     </div>
+                    {pool.teams.length === 2 && (
+                      <button
+                        onClick={() => handleSwapPoolTeams(pool.id)}
+                        title="Inverter ordem (Chaveamento 1 e 2)"
+                        className="py-1 px-2 rounded-lg bg-[#1C1613] border border-[#2D211C] hover:border-[#FF5000] hover:text-[#FFD000] text-neutral-400 text-[10px] font-bold font-mono transition-all flex items-center gap-1 cursor-pointer active:scale-95 z-20"
+                      >
+                        <span>⇅ Inverter</span>
+                      </button>
+                    )}
                   </div>
                   
                   <div className="flex flex-col gap-2 flex-1 relative">
-                    {pool.teams.map((team) => (
+                    {pool.teams.map((team, tIdx) => (
                       <TeamCard 
                         key={team.id} 
                         team={team} 
                         sourceType="pool" 
                         sourceId={pool.id} 
                         onDragStart={handleDragStart} 
+                        badge={`${tIdx + 1}º`}
                       />
                     ))}
                     

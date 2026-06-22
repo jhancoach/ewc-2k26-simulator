@@ -9,7 +9,7 @@ export const DEFAULT_POOLS: Pool[] = [
     teams: [
       {
         id: "team-evos",
-        name: "EVOS Divine",
+        name: "EVOS",
         region: "Indonésia",
         flag: "🇮🇩",
         logoBg: "from-blue-600 to-cyan-800",
@@ -19,15 +19,15 @@ export const DEFAULT_POOLS: Pool[] = [
         logoUrl: "https://i.ibb.co/67FKcJ98/EVOS.png",
         },
       {
-        id: "team-loud",
-        name: "LOUD",
+        id: "team-fluxo",
+        name: "Fluxo",
         region: "Brasil",
         flag: "🇧🇷",
-        logoBg: "from-lime-500 to-green-600",
-        textColor: "text-green-950",
-        borderColor: "border-lime-400",
-        initials: "LOUD",
-        logoUrl: "https://i.ibb.co/xSP7G5n7/LOUD.png",
+        logoBg: "from-purple-600 to-fuchsia-900",
+        textColor: "text-fuchsia-100",
+        borderColor: "border-purple-400",
+        initials: "FLX",
+        logoUrl: "https://i.ibb.co/4n3NFY6Q/FLUXO.png",
         }
     ]
   },
@@ -158,6 +158,17 @@ export const DEFAULT_POOLS: Pool[] = [
     isActive: true,
     teams: [
       {
+        id: "team-loud",
+        name: "LOUD",
+        region: "Brasil",
+        flag: "🇧🇷",
+        logoBg: "from-lime-500 to-green-600",
+        textColor: "text-green-950",
+        borderColor: "border-lime-400",
+        initials: "LOUD",
+        logoUrl: "https://i.ibb.co/xSP7G5n7/LOUD.png",
+        },
+      {
         id: "team-losmibr",
         name: "LOS / MIBR",
         region: "Brasil",
@@ -167,17 +178,6 @@ export const DEFAULT_POOLS: Pool[] = [
         borderColor: "border-sky-400",
         initials: "MIBR",
         logoUrl: "https://i.ibb.co/Mm2K8CB/LOSMIBR.png",
-        },
-      {
-        id: "team-fluxo",
-        name: "Fluxo",
-        region: "Brasil",
-        flag: "🇧🇷",
-        logoBg: "from-purple-600 to-fuchsia-900",
-        textColor: "text-fuchsia-100",
-        borderColor: "border-purple-400",
-        initials: "FLX",
-        logoUrl: "https://i.ibb.co/4n3NFY6Q/FLUXO.png",
         }
     ]
   },
