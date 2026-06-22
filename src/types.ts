@@ -14,7 +14,7 @@ export interface Pool {
   id: string;
   name: string;
   description: string;
-  teams: [Team, Team];
+  teams: Team[];
   isActive: boolean; // Whether the pool is active (for 18-team draw)
 }
 

@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, DragEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, RefreshCw, Play, Shuffle, GripVertical } from 'lucide-react';
 import { DEFAULT_POOLS } from './data/mockTeams';
+import { PROTOTYPE_POOLS } from './data/protoTeams';
 import { Group, Team, Pool } from './types';
 import { MapDropSimulator } from './components/MapDropSimulator';
 
@@ -9,18 +10,25 @@ import { MapDropSimulator } from './components/MapDropSimulator';
 const solveDraw = (teamsToPlace: Team[], currentGroups: Group[], teamToPoolId: Record<string, string>): Group[] | null => {
   const groupsState = currentGroups.map(g => ({ ...g, teams: [...g.teams] }));
 
+  // Pre-calculate pool sizes from the current setup
+  const poolSizes: Record<string, number> = {};
+  Object.values(teamToPoolId).forEach(pId => {
+    poolSizes[pId] = (poolSizes[pId] || 0) + 1;
+  });
+
   const solve = (teamIndex: number): boolean => {
     if (teamIndex === teamsToPlace.length) return true;
 
     const team = teamsToPlace[teamIndex];
     const poolId = teamToPoolId[team.id];
+    const maxAllowed = Math.ceil((poolSizes[poolId] || 0) / 2);
 
     const groupIndices = [0, 1].sort(() => Math.random() - 0.5);
     for (const gIdx of groupIndices) {
       const g = groupsState[gIdx];
       if (g.teams.length < 12) {
-        const hasConflict = g.teams.some(t => teamToPoolId[t.id] === poolId);
-        if (!hasConflict) {
+        const countFromThisPool = g.teams.filter(t => teamToPoolId[t.id] === poolId).length;
+        if (countFromThisPool < maxAllowed) {
           g.teams.push(team);
           if (solve(teamIndex + 1)) {
             return true;
@@ -77,9 +85,14 @@ const TeamCard = ({ team, sourceType, sourceId, onDragStart, badge }: { team: Te
 }
 
 export default function App() {
-  const initialPools = useMemo(() => DEFAULT_POOLS.filter(p => p.isActive).map(p => ({ ...p, teams: [...p.teams] })), []);
-  
-  const [pools, setPools] = useState<Pool[]>(initialPools);
+  const [activeMode, setActiveMode] = useState<'official' | 'prototype'>('official');
+
+  const initialPoolsForMode = useCallback((mode: 'official' | 'prototype') => {
+    const source = mode === 'official' ? DEFAULT_POOLS : PROTOTYPE_POOLS;
+    return source.filter(p => p.isActive).map(p => ({ ...p, teams: [...p.teams] }));
+  }, []);
+
+  const [pools, setPools] = useState<Pool[]>(() => initialPoolsForMode('official'));
   const [groups, setGroups] = useState<Group[]>([
     { id: 'A', name: 'GROUP A', teams: [] },
     { id: 'B', name: 'GROUP B', teams: [] },
@@ -87,30 +100,39 @@ export default function App() {
 
   const [isEditingPots, setIsEditingPots] = useState(false);
 
-  const [customTeamToPoolId, setCustomTeamToPoolId] = useState<Record<string, string>>(() => {
+  const getOriginalTeamToPoolMap = useCallback((mode: 'official' | 'prototype') => {
     const map: Record<string, string> = {};
-    DEFAULT_POOLS.forEach(p => {
+    const source = mode === 'official' ? DEFAULT_POOLS : PROTOTYPE_POOLS;
+    source.forEach(p => {
       p.teams.forEach(t => {
         map[t.id] = p.id;
       });
     });
     return map;
-  });
+  }, []);
+
+  const [customTeamToPoolId, setCustomTeamToPoolId] = useState<Record<string, string>>(() => 
+    getOriginalTeamToPoolMap('official')
+  );
+
+  const handleModeChange = (mode: 'official' | 'prototype') => {
+    setActiveMode(mode);
+    setIsEditingPots(false);
+    setGroups([
+      { id: 'A', name: 'GROUP A', teams: [] },
+      { id: 'B', name: 'GROUP B', teams: [] },
+    ]);
+    setPools(initialPoolsForMode(mode));
+    setCustomTeamToPoolId(getOriginalTeamToPoolMap(mode));
+  };
 
   const resetDraw = () => {
     setGroups([
       { id: 'A', name: 'GROUP A', teams: [] },
       { id: 'B', name: 'GROUP B', teams: [] },
     ]);
-    setPools(initialPools);
-    // Reset custom pots back to original configuration
-    const originalMap: Record<string, string> = {};
-    DEFAULT_POOLS.forEach(p => {
-      p.teams.forEach(t => {
-        originalMap[t.id] = p.id;
-      });
-    });
-    setCustomTeamToPoolId(originalMap);
+    setPools(initialPoolsForMode(activeMode));
+    setCustomTeamToPoolId(getOriginalTeamToPoolMap(activeMode));
   };
 
   const drawNextPool = () => {
@@ -121,7 +143,11 @@ export default function App() {
     const result = solveDraw(unplacedTeams, groups, customTeamToPoolId);
     
     if (!result) {
-      alert("Não é possível completar o sorteio com a configuração atual. Se você editou os potes, certifique-se de que cada um tenha exatamente 2 equipes!");
+      if (activeMode === 'official') {
+        alert("Não é possível completar o sorteio com a configuração atual. Se você editou os potes, certifique-se de que cada um tenha exatamente 2 equipes!");
+      } else {
+        alert("Não é possível completar o sorteio com a configuração atual nessa distribuição de potes. Ajuste as equipes e tente novamente!");
+      }
       return;
     }
 
@@ -142,13 +168,52 @@ export default function App() {
     setPools(nextPools);
   };
 
+  const drawSingleTeam = () => {
+    const nextPoolIndex = pools.findIndex(p => p.teams.length > 0);
+    if (nextPoolIndex === -1) return;
+
+    const unplacedTeams = pools.flatMap(p => p.teams);
+    const result = solveDraw(unplacedTeams, groups, customTeamToPoolId);
+    
+    if (!result) {
+      if (activeMode === 'official') {
+        alert("Não é possível completar o sorteio com a configuração atual. Se você editou os potes, certifique-se de que cada um tenha exatamente 2 equipes!");
+      } else {
+        alert("Não é possível completar o sorteio com a configuração atual nessa distribuição de potes. Ajuste as equipes e tente novamente!");
+      }
+      return;
+    }
+
+    const poolToDraw = pools[nextPoolIndex];
+    const teamToPlace = poolToDraw.teams[0];
+    if (!teamToPlace) return;
+
+    const nextGroups = [...groups.map(g => ({ ...g, teams: [...g.teams] }))];
+    const nextPools = [...pools.map(p => ({ ...p, teams: [...p.teams] }))];
+
+    const targetGroupIndex = result.findIndex(g => g.teams.some(t => t.id === teamToPlace.id));
+    if (targetGroupIndex !== -1) {
+      nextGroups[targetGroupIndex].teams.push(teamToPlace);
+    }
+
+    const pIdx = nextPools.findIndex(p => p.id === poolToDraw.id);
+    nextPools[pIdx].teams = nextPools[pIdx].teams.filter(t => t.id !== teamToPlace.id);
+
+    setGroups(nextGroups);
+    setPools(nextPools);
+  };
+
   const drawAll = () => {
     const unplacedTeams = pools.flatMap(p => p.teams);
     if (unplacedTeams.length === 0) return;
 
     const result = solveDraw(unplacedTeams, groups, customTeamToPoolId);
     if (!result) {
-      alert("Não é possível completar o sorteio com a configuração atual. Se você editou os potes, certifique-se de que cada um tenha exatamente 2 equipes!");
+      if (activeMode === 'official') {
+        alert("Não é possível completar o sorteio com a configuração atual. Se você editou os potes, certifique-se de que cada um tenha exatamente 2 equipes!");
+      } else {
+        alert("Não é possível completar o sorteio com a configuração atual nessa distribuição de potes. Ajuste as equipes e tente novamente!");
+      }
       return;
     }
 
@@ -205,9 +270,22 @@ export default function App() {
     }
 
     const poolId = customTeamToPoolId[team.id];
-    const hasConflict = targetGroup.teams.some(t => t.id !== teamId && customTeamToPoolId[t.id] === poolId);
-    if (hasConflict) {
-      alert('Não é permitido colocar dois times do mesmo pote no mesmo grupo!');
+
+    // Precalculate total size of this pool in customTeamToPoolId mapping
+    let poolSize = 0;
+    Object.values(customTeamToPoolId).forEach(pId => {
+      if (pId === poolId) poolSize++;
+    });
+
+    const maxAllowed = Math.ceil(poolSize / 2);
+    const countInTargetGroup = targetGroup.teams.filter(t => t.id !== teamId && customTeamToPoolId[t.id] === poolId).length;
+
+    if (countInTargetGroup >= maxAllowed) {
+      if (maxAllowed === 1) {
+        alert('Não é permitido colocar dois times do mesmo pote no mesmo grupo!');
+      } else {
+        alert(`Não é permitido colocar mais do que ${maxAllowed} times das equipes do pote "${poolId}" no mesmo grupo!`);
+      }
       return;
     }
 
@@ -273,7 +351,7 @@ export default function App() {
       <div className="max-w-7xl mx-auto px-4 py-8 md:py-12 flex flex-col relative z-10">
 
         {/* Header */}
-        <header className="flex flex-col items-center justify-center mb-10 space-y-4">
+        <header className="flex flex-col items-center justify-center mb-6 space-y-4">
           <div className="flex items-center justify-center mb-2 filter drop-shadow-[0_0_30px_rgba(255,80,0,0.25)]">
             <img 
               src="https://i.ibb.co/Xrsj11wz/LOGO-EWC.png" 
@@ -291,35 +369,82 @@ export default function App() {
           </div>
 
           <p className="text-xs sm:text-sm text-neutral-400 font-semibold max-w-lg text-center tracking-wide leading-relaxed pt-1">
-            Simulador do Sorteio Oficial de Grupos • Regra Oficial: Equipes do mesmo pote não podem cair no mesmo grupo. Arraste ou use o sorteador automático.
+            {activeMode === 'official' 
+              ? 'Simulador do Sorteio Oficial de Grupos • Regra Oficial: Equipes do mesmo pote não podem cair no mesmo grupo. Arraste ou use o sorteador automático.'
+              : 'Simulação Protótipo • Regra Especial: Equipes de potes variados balanceados de forma equivalente e sem conflito de sementes entre grupos.'}
           </p>
         </header>
 
+        {/* Tab Selector Pages */}
+        <div className="flex justify-center mb-10">
+          <div className="inline-flex bg-[#0C0908] border border-[#1E1512] p-1.5 rounded-2xl gap-2 backdrop-blur-md shadow-lg relative">
+            <button
+              onClick={() => handleModeChange('official')}
+              className={`group relative cursor-pointer font-black text-xs sm:text-sm tracking-widest uppercase transition-all duration-300 px-5 sm:px-6 py-2.5 rounded-xl flex items-center gap-1.5 focus:outline-none ${
+                activeMode === 'official'
+                  ? 'bg-gradient-to-r from-[#FF5000] to-[#FF8000] text-black font-extrabold shadow-[0_0_20px_rgba(255,80,0,0.25)] scale-[1.02]'
+                  : 'text-neutral-400 hover:text-white hover:bg-[#150F0D]'
+              }`}
+            >
+              <span>🏁 Sorteio Oficial (EWC)</span>
+            </button>
+            <button
+              onClick={() => handleModeChange('prototype')}
+              className={`group relative cursor-pointer font-black text-xs sm:text-sm tracking-widest uppercase transition-all duration-300 px-5 sm:px-6 py-2.5 rounded-xl flex items-center gap-1.5 focus:outline-none ${
+                activeMode === 'prototype'
+                  ? 'bg-gradient-to-r from-[#FFD000] to-[#FFA000] text-black font-extrabold shadow-[0_0_20px_rgba(255,208,0,0.25)] scale-[1.02]'
+                  : 'text-neutral-400 hover:text-white hover:bg-[#150F0D]'
+              }`}
+            >
+              <span>🧪 Simulação Protótipo</span>
+            </button>
+          </div>
+        </div>
+
         {/* Action Bar */}
-        <div className="flex flex-wrap items-center justify-center gap-4 mb-4">
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mb-4">
           {!allPlaced ? (
             <>
+              {/* PRIMARY ACTION: DRAW A SINGLE TEAM ONE-BY-ONE */}
               <button
-                onClick={drawNextPool}
-                className="group relative cursor-pointer focus:outline-none transition-transform active:scale-95 duration-200"
+                onClick={drawSingleTeam}
+                title="Sortear um time de cada vez para os grupos"
+                className="group relative cursor-pointer focus:outline-none transition-transform active:scale-95 duration-200 animate-pulse hover:animate-none"
               >
-                <div className="skew-x-[-10deg] bg-gradient-to-r from-[#FF5000] via-[#FF8000] to-[#FFD000] text-black font-black text-xs sm:text-sm tracking-widest uppercase px-6 py-3.5 flex items-center gap-2.5 shadow-[0_0_25px_rgba(255,80,0,0.3)] hover:shadow-[0_0_35px_rgba(255,80,0,0.5)] transition-all">
-                  <Play className="w-4.5 h-4.5 fill-black skew-x-[10deg]" />
-                  <span className="skew-x-[10deg]">Sortear Pote {nextPoolIndexToDraw !== -1 ? `${nextPoolIndexToDraw + 1}/${pools.length}` : ''}</span>
+                <div className="skew-x-[-10deg] bg-gradient-to-r from-[#FF5000] via-[#FF8000] to-[#FFD000] text-black font-black text-xs sm:text-sm tracking-widest uppercase px-5 sm:px-6 py-3.5 flex items-center gap-2.5 shadow-[0_0_25px_rgba(255,80,0,0.35)] hover:shadow-[0_0_35px_rgba(255,80,0,0.6)] transition-all">
+                  <Play className="w-4 h-4 fill-black skew-x-[10deg]" />
+                  <span className="skew-x-[10deg]">🎯 Sortear 1 Equipe</span>
                 </div>
               </button>
 
+              {/* SECONDARY ACTION: DRAW THE REST OF THE POT AT ONCE */}
               <button
-                onClick={drawAll}
+                onClick={drawNextPool}
+                title="Sortear todas as equipes do pote atual de uma vez só"
                 className="group relative cursor-pointer focus:outline-none transition-transform active:scale-95 duration-200"
               >
-                <div className="skew-x-[-10deg] bg-[#110E0D] hover:bg-[#1C1715] text-[#FFD000] border border-[#FF5000]/55 font-bold text-xs sm:text-sm tracking-widest uppercase px-6 py-3.5 flex items-center gap-2 transition-all">
-                  <Shuffle className="w-4.5 h-4.5 skew-x-[10deg]" />
-                  <span className="skew-x-[10deg]">Sortear Tudo</span>
+                <div className="skew-x-[-10deg] bg-[#110E0D] hover:bg-[#1E1715] text-[#FAFAFA] border border-[#FF5000]/40 hover:border-[#FF5000] font-bold text-xs sm:text-sm tracking-widest uppercase px-5 sm:px-6 py-3.5 flex items-center gap-2 transition-all">
+                  <span className="skew-x-[10deg]">🗳️ Sortear Pote {nextPoolIndexToDraw !== -1 ? `${nextPoolIndexToDraw + 1}/${pools.length}` : ''}</span>
+                </div>
+              </button>
+
+              {/* TERTIARY ACTION: DRAW ALL REMAINING TEAMS */}
+              <button
+                onClick={drawAll}
+                title="Completar todo o sorteio automaticamente"
+                className="group relative cursor-pointer focus:outline-none transition-transform active:scale-95 duration-200"
+              >
+                <div className="skew-x-[-10deg] bg-[#110E0D] hover:bg-[#1C1715] text-[#FFD000] border border-[#FFD000]/30 hover:border-[#FFD000] font-bold text-xs sm:text-sm tracking-widest uppercase px-5 sm:px-6 py-3.5 flex items-center gap-2 transition-all">
+                  <Shuffle className="w-4 h-4 skew-x-[10deg] text-[#FFD000]" />
+                  <span className="skew-x-[10deg]">Sorteio Direto</span>
                 </div>
               </button>
             </>
-          ) : null}
+          ) : (
+            <div className="skew-x-[-10deg] bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E] px-6 py-3.5 rounded text-xs tracking-wider font-extrabold uppercase bg-neutral-950/80">
+              <span className="block skew-x-[10deg]">🎉 Sorteio Concluído com Sucesso!</span>
+            </div>
+          )}
           
           <button
             onClick={resetDraw}
@@ -332,166 +457,166 @@ export default function App() {
           </button>
         </div>
         
-        {/* Status Legends in EWC Colors with Skewed design */}
-        <div className="mb-10 text-center flex flex-wrap justify-center items-center gap-3 sm:gap-4 mt-2">
-          <div className="skew-x-[-10deg] bg-[#139BE9]/10 border border-[#139BE9]/30 text-[#139BE9] px-4 py-2 rounded text-[11px] font-black uppercase tracking-widest">
-             <span className="block skew-x-[10deg]">🏆 1º ao 4º → Fase Final</span>
-          </div>
-          <div className="skew-x-[-10deg] bg-[#FFD000]/10 border border-[#FFD000]/30 text-[#FFD000] px-4 py-2 rounded text-[11px] font-black uppercase tracking-widest">
-             <span className="block skew-x-[10deg]">🔥 5º ao 10º → Sobrevivência</span>
-          </div>
-          <div className="skew-x-[-10deg] bg-[#FF5000]/10 border border-[#FF5000]/30 text-[#FF5000] px-4 py-2 rounded text-[11px] font-black uppercase tracking-widest">
-             <span className="block skew-x-[10deg]">💀 11º e 12º → Eliminados</span>
-          </div>
-        </div>
-
-        {/* Groups Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 mb-16">
-          {groups.map((group) => (
-            <div key={group.id} className="flex flex-col">
-              <div className="flex items-center justify-between mb-4 px-2">
-                <h2 className="text-lg sm:text-xl font-black tracking-widest text-[#FAFAFA] flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-[#FF5000] to-[#FFD000] rotate-45" />
-                  {group.name}
-                </h2>
-                <div className="text-xs font-mono font-black text-[#FFD000] tracking-wider bg-[#130E0D] px-3.5 py-1.5 rounded-lg border border-[#3E2B24]">
-                  {group.teams.length} / 12 EQUIPES
-                </div>
-              </div>
-
-              <div 
-                className={`flex-1 bg-[#100C0B]/90 backdrop-blur-md border border-[#1C1613] rounded-3xl p-5 flex flex-col gap-3 min-h-[500px] shadow-[0_0_30px_rgba(255,80,0,0.015)] transition-all duration-300 ${group.teams.length < 12 ? 'hover:border-[#FF5000]/30 hover:shadow-[0_0_20px_rgba(255,80,0,0.04)]' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                onDrop={(e) => handleDropToGroup(e, group.id)}
-              >
-                {group.teams.map((team) => (
-                   <TeamCard 
-                     key={team.id} 
-                     team={team} 
-                     sourceType="group" 
-                     sourceId={group.id} 
-                     onDragStart={handleDragStart} 
-                   />
-                ))}
-                
-                {group.teams.length === 0 && (
-                  <div className="flex-1 flex items-center justify-center p-4">
-                    <span className="text-neutral-600 font-black text-xs tracking-widest uppercase text-center border-2 border-dashed border-[#241A16] p-8 rounded-2xl w-full h-full flex items-center justify-center min-h-[200px]">
-                      Arraste e solte as equipes aqui
-                    </span>
+        {/* Main Columns Container */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 mb-16 items-start">
+          
+          {/* Groups Box (col-span-8 on desktop) */}
+          <div className="xl:col-span-8 flex flex-col gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+              {groups.map((group) => (
+                <div key={group.id} className="flex flex-col">
+                  <div className="flex items-center justify-between mb-4 px-2">
+                    <h2 className="text-lg sm:text-xl font-black tracking-widest text-[#FAFAFA] flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-[#FF5000] to-[#FFD000] rotate-45" />
+                      {group.name}
+                    </h2>
+                    <div className="text-xs font-mono font-black text-[#FFD000] tracking-wider bg-[#130E0D] px-3.5 py-1.5 rounded-lg border border-[#3E2B24]">
+                      {group.teams.length} / 12 EQUIPES
+                    </div>
                   </div>
-                )}
-                
-                {group.teams.length > 0 && Array.from({ length: Math.max(0, 12 - group.teams.length) }).map((_, i) => (
-                  <div
-                    key={`empty-${i}`}
-                    className="h-[60px] sm:h-[68px] border border-dashed border-[#1E1613] rounded-xl flex items-center justify-center bg-[#0C0908]/20"
+
+                  <div 
+                    className={`flex-1 bg-[#100C0B]/90 backdrop-blur-md border border-[#1C1613] rounded-3xl p-5 flex flex-col gap-3 min-h-[500px] shadow-[0_0_30px_rgba(255,80,0,0.015)] transition-all duration-300 ${group.teams.length < 12 ? 'hover:border-[#FF5000]/30 hover:shadow-[0_0_20px_rgba(255,80,0,0.04)]' : ''}`}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                    onDrop={(e) => handleDropToGroup(e, group.id)}
                   >
-                     <div className="text-[#382C27] text-xs font-mono font-black uppercase tracking-widest opacity-40">SLOT DISPONÍVEL</div>
+                    {group.teams.map((team) => (
+                       <TeamCard 
+                         key={team.id} 
+                         team={team} 
+                         sourceType="group" 
+                         sourceId={group.id} 
+                         onDragStart={handleDragStart} 
+                       />
+                    ))}
+                    
+                    {group.teams.length === 0 && (
+                      <div className="flex-1 flex items-center justify-center p-4">
+                        <span className="text-neutral-600 font-black text-xs tracking-widest uppercase text-center border-2 border-dashed border-[#241A16] p-8 rounded-2xl w-full h-full flex items-center justify-center min-h-[200px]">
+                          Arraste e solte as equipes aqui
+                        </span>
+                      </div>
+                    )}
+                    
+                    {group.teams.length > 0 && Array.from({ length: Math.max(0, 12 - group.teams.length) }).map((_, i) => (
+                      <div
+                        key={`empty-${i}`}
+                        className="h-[60px] sm:h-[68px] border border-dashed border-[#1E1613] rounded-xl flex items-center justify-center bg-[#0C0908]/20"
+                      >
+                         <div className="text-[#382C27] text-xs font-mono font-black uppercase tracking-widest opacity-40">SLOT DISPONÍVEL</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Pools Area */}
-        <div className="border-t border-[#1C1613] pt-10">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 px-2 gap-4">
-            <h2 className="text-xl sm:text-2xl font-black tracking-widest text-[#FFD000] uppercase flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#FF5000] animate-pulse" />
-              Potes do Sorteio
-            </h2>
-            
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsEditingPots(!isEditingPots)}
-                className="group relative cursor-pointer focus:outline-none transition-transform active:scale-95 duration-200"
-              >
-                <div className={`skew-x-[-10deg] border font-black text-[10px] sm:text-xs tracking-widest uppercase px-4 py-2 flex items-center gap-1.5 transition-all ${
-                  isEditingPots 
-                    ? 'bg-[#FF5000] border-[#FF5000] text-black shadow-[0_0_20px_rgba(255,80,0,0.35)]' 
-                    : 'bg-[#110E0D] hover:bg-[#1C1715] text-[#FFD000] border-[#FF5000]/40'
-                }`}>
-                  <span className="skew-x-[10deg] flex items-center gap-1">
-                    {isEditingPots ? '⚙️ Pronto / Salvar' : '✏️ Editar Potes'}
-                  </span>
                 </div>
-              </button>
+              ))}
+            </div>
+          </div>
 
-              <div className="text-xs sm:text-sm font-black text-neutral-400 tracking-wider font-mono bg-[#0D0A09]/50 border border-[#241A16] px-3 py-1.5 rounded-lg">
+          {/* Pools Area (col-span-4 on desktop, nested in sticky sidebar wrapper) */}
+          <div className="xl:col-span-4 xl:sticky xl:top-6 flex flex-col bg-[#100C0B]/90 border border-[#1C1613] p-5 sm:p-6 rounded-3xl backdrop-blur-md shadow-[0_0_30px_rgba(0,0,0,0.5)] w-full">
+            <div className="flex items-center justify-between mb-4 px-1 gap-4">
+              <h2 className="text-md sm:text-lg font-black tracking-widest text-[#FFD000] uppercase flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#FF5000] animate-pulse" />
+                Potes de Semente
+              </h2>
+              
+              <div className="text-xs font-black text-neutral-400 tracking-wider font-mono bg-[#0D0A09]/50 border border-[#241A16] px-3 py-1.5 rounded-lg shrink-0">
                  RESTANTES: <span className="text-[#FF5000]">{pools.reduce((acc, p) => acc + p.teams.length, 0)}</span>
               </div>
             </div>
+
+            <div className="mb-4">
+              <button
+                onClick={() => setIsEditingPots(!isEditingPots)}
+                className="group w-full relative cursor-pointer focus:outline-none transition-transform active:scale-95 duration-200"
+              >
+                <div className={`skew-x-[-10deg] border border-[#FF5000]/40 font-black text-xs tracking-widest uppercase py-2.5 flex items-center justify-center gap-1.5 transition-all ${
+                  isEditingPots 
+                    ? 'bg-[#FF5000] border-[#FF5000] text-black shadow-[0_0_20px_rgba(255,80,0,0.35)] font-black' 
+                    : 'bg-[#110E0D] hover:bg-[#1C1715] text-[#FFD000] hover:text-[#FAFAFA]'
+                }`}>
+                  <span className="skew-x-[10deg] flex items-center gap-1">
+                    {isEditingPots ? '⚙️ Salvar Configuração' : '✏️ Personalizar Potes'}
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            {isEditingPots && (
+              <div className="mb-4 p-3.5 rounded-xl bg-[#1C120E]/40 border border-[#FF5000]/30 text-xs text-neutral-300 leading-relaxed font-semibold transition-all">
+                <p className="flex items-center gap-1.5 text-[#FFD000] font-black uppercase tracking-wider mb-1">
+                  <span>⚠️</span> Edição Ativa
+                </p>
+                Configure os potes. {activeMode === 'official' ? (
+                  <>Mantenha <strong className="text-[#FAFAFA]">2 equipes por pote</strong>.</>
+                ) : (
+                  <>Distribuição livre das 24 equipes.</>
+                )}
+              </div>
+            )}
+            
+            {/* Scrollable list of Pots */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3 max-h-[64vh] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-neutral-800">
+              {pools.map((pool, idx) => {
+                const isCurrentDraw = idx === nextPoolIndexToDraw;
+                const isEmpty = pool.teams.length === 0;
+                
+                return (
+                  <div 
+                    key={pool.id} 
+                    className={`bg-[#0C0908]/90 border rounded-2xl p-3 flex flex-col gap-2.5 min-h-[100px] transition-all duration-300 ${
+                      isCurrentDraw && !allPlaced 
+                        ? 'border-[#FF5000]/70 bg-[#140E0C]/95 shadow-[0_0_15px_rgba(255,80,0,0.15)] scale-[1.01]' 
+                        : 'border-[#1C1613] hover:border-neutral-700'
+                    }`}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                    onDrop={(e) => handleDropToPool(e, pool.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className={`text-[10px] sm:text-xs font-black tracking-widest uppercase select-none pointer-events-none ${isCurrentDraw && !allPlaced ? 'text-[#FFD000]' : isEmpty ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                        {pool.name}
+                      </div>
+                      {pool.teams.length >= 2 && (
+                        <button
+                          onClick={() => handleSwapPoolTeams(pool.id)}
+                          title="Inverter ordem dos dois primeiros times"
+                          className="py-1 px-1.5 rounded bg-[#1C1613] border border-[#2D211C] hover:border-[#FF5000] hover:text-[#FFD000] text-neutral-400 text-[9px] font-bold font-mono transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+                        >
+                          <span>⇅ Inverter</span>
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="flex flex-col gap-1.5 flex-1 relative min-h-[40px]">
+                      {pool.teams.map((team, tIdx) => (
+                        <TeamCard 
+                          key={team.id} 
+                          team={team} 
+                          sourceType="pool" 
+                          sourceId={pool.id} 
+                          onDragStart={handleDragStart} 
+                          badge={`${tIdx + 1}º`}
+                        />
+                      ))}
+                      
+                      {isEmpty && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/10 rounded-xl">
+                          <span className="text-neutral-600 font-mono font-black uppercase text-[9px] tracking-widest">Sorteado</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          {isEditingPots && (
-            <div className="mb-8 p-4 rounded-xl bg-[#1C120E]/40 border border-[#FF5000]/30 text-xs sm:text-sm text-neutral-350 leading-relaxed font-semibold transition-all">
-              <p className="flex items-center gap-2 text-[#FFD000] font-black uppercase tracking-wider mb-1.5">
-                <span>⚠️</span> Modo Especial de Edição Ativo
-              </p>
-              Agora você pode arrastar qualquer equipe de um pote para outro para personalizar as sementes oficiais. 
-              <span className="text-[#FF5000]"> Nota Importante:</span> O sorteio exige exatamente <strong className="text-[#FAFAFA]">2 equipes por pote</strong> (totalizando 24 equipes) para que os grupos fiquem perfeitamente balanceados e sem conflitos de regras.
-            </div>
-          )}
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {pools.map((pool, idx) => {
-              const isCurrentDraw = idx === nextPoolIndexToDraw;
-              const isEmpty = pool.teams.length === 0;
-              
-              return (
-                <div 
-                  key={pool.id} 
-                  className={`bg-[#100C0B]/90 backdrop-blur-md border rounded-2xl p-4 flex flex-col gap-3 min-h-[140px] transition-all ${
-                    isCurrentDraw && !allPlaced 
-                      ? 'border-[#FF5000]/60 shadow-[0_0_25px_rgba(255,80,0,0.25)] scale-[1.02]' 
-                      : 'border-neutral-850 hover:border-[#FF5000]/30'
-                  }`}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                  onDrop={(e) => handleDropToPool(e, pool.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className={`text-xs font-black tracking-widest uppercase select-none pointer-events-none ${isCurrentDraw && !allPlaced ? 'text-[#FFD000]' : isEmpty ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                      {pool.name}
-                    </div>
-                    {pool.teams.length === 2 && (
-                      <button
-                        onClick={() => handleSwapPoolTeams(pool.id)}
-                        title="Inverter ordem (Chaveamento 1 e 2)"
-                        className="py-1 px-2 rounded-lg bg-[#1C1613] border border-[#2D211C] hover:border-[#FF5000] hover:text-[#FFD000] text-neutral-400 text-[10px] font-bold font-mono transition-all flex items-center gap-1 cursor-pointer active:scale-95 z-20"
-                      >
-                        <span>⇅ Inverter</span>
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-col gap-2 flex-1 relative">
-                    {pool.teams.map((team, tIdx) => (
-                      <TeamCard 
-                        key={team.id} 
-                        team={team} 
-                        sourceType="pool" 
-                        sourceId={pool.id} 
-                        onDragStart={handleDragStart} 
-                        badge={`${tIdx + 1}º`}
-                      />
-                    ))}
-                    
-                    {isEmpty && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-neutral-800 font-mono font-black uppercase text-[11px] tracking-widest bg-black/30 px-3 py-1 rounded border border-neutral-900">Sorteado</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </div>
 
         {loudGroupTeams.length > 0 && (
-          <MapDropSimulator loudGroupTeams={loudGroupTeams} />
+          <div className="mt-8 w-full">
+            <MapDropSimulator loudGroupTeams={loudGroupTeams} />
+          </div>
         )}
 
         {/* Tournament Format Info */}
