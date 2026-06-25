@@ -46,6 +46,44 @@ const solveDraw = (teamsToPlace: Team[], currentGroups: Group[], teamToPoolId: R
   return null;
 };
 
+const PROTO_GROUP_A_IDS = [
+  'team-evos',
+  'team-ag',
+  'team-buriram',
+  'team-falcons',
+  'team-apex',
+  'team-gundinasty',
+  'team-titan',
+  'team-drs',
+  'team-demons',
+  'team-paradox',
+  'team-aurora',
+  'team-loud',
+];
+
+const PROTO_GROUP_B_IDS = [
+  'team-fluxo',
+  'team-secret',
+  'team-rrq',
+  'team-vitality',
+  'team-losmibr',
+  'team-s8ul',
+  'team-lyon',
+  'team-strawhats',
+  'team-totalgaming',
+  'team-ahali',
+  'team-mia',
+  'team-twisted',
+];
+
+const findTeamById = (id: string, sourcePools: Pool[]): Team | undefined => {
+  for (const pool of sourcePools) {
+    const t = pool.teams.find(team => team.id === id);
+    if (t) return t;
+  }
+  return undefined;
+};
+
 const TeamCard = ({ team, sourceType, sourceId, onDragStart, badge }: { team: Team, sourceType: 'pool' | 'group', sourceId: string, onDragStart: (e: DragEvent, team: Team, sourceId: string, sourceType: 'pool' | 'group') => void, key?: string, badge?: string }) => {
   return (
     <motion.div
@@ -89,14 +127,48 @@ export default function App() {
 
   const initialPoolsForMode = useCallback((mode: 'official' | 'prototype') => {
     const source = mode === 'official' ? DEFAULT_POOLS : PROTOTYPE_POOLS;
-    return source.filter(p => p.isActive).map(p => ({ ...p, teams: [...p.teams] }));
+    if (mode === 'official') {
+      return source.filter(p => p.isActive).map(p => ({ ...p, teams: [...p.teams] }));
+    } else {
+      return source.filter(p => p.isActive).map(p => {
+        const remainingTeams = p.teams.filter(t => 
+          !PROTO_GROUP_A_IDS.includes(t.id) && !PROTO_GROUP_B_IDS.includes(t.id)
+        );
+        return { ...p, teams: remainingTeams };
+      });
+    }
+  }, []);
+
+  const initialGroupsForMode = useCallback((mode: 'official' | 'prototype') => {
+    if (mode === 'official') {
+      return [
+        { id: 'A', name: 'GROUP A', teams: [] },
+        { id: 'B', name: 'GROUP B', teams: [] },
+      ];
+    } else {
+      const sourcePools = PROTOTYPE_POOLS;
+      const groupATeams: Team[] = [];
+      const groupBTeams: Team[] = [];
+
+      PROTO_GROUP_A_IDS.forEach(id => {
+        const team = findTeamById(id, sourcePools);
+        if (team) groupATeams.push(team);
+      });
+
+      PROTO_GROUP_B_IDS.forEach(id => {
+        const team = findTeamById(id, sourcePools);
+        if (team) groupBTeams.push(team);
+      });
+
+      return [
+        { id: 'A', name: 'GROUP A', teams: groupATeams },
+        { id: 'B', name: 'GROUP B', teams: groupBTeams },
+      ];
+    }
   }, []);
 
   const [pools, setPools] = useState<Pool[]>(() => initialPoolsForMode('prototype'));
-  const [groups, setGroups] = useState<Group[]>([
-    { id: 'A', name: 'GROUP A', teams: [] },
-    { id: 'B', name: 'GROUP B', teams: [] },
-  ]);
+  const [groups, setGroups] = useState<Group[]>(() => initialGroupsForMode('prototype'));
 
   const [isEditingPots, setIsEditingPots] = useState(false);
 
@@ -118,19 +190,13 @@ export default function App() {
   const handleModeChange = (mode: 'official' | 'prototype') => {
     setActiveMode(mode);
     setIsEditingPots(false);
-    setGroups([
-      { id: 'A', name: 'GROUP A', teams: [] },
-      { id: 'B', name: 'GROUP B', teams: [] },
-    ]);
+    setGroups(initialGroupsForMode(mode));
     setPools(initialPoolsForMode(mode));
     setCustomTeamToPoolId(getOriginalTeamToPoolMap(mode));
   };
 
   const resetDraw = () => {
-    setGroups([
-      { id: 'A', name: 'GROUP A', teams: [] },
-      { id: 'B', name: 'GROUP B', teams: [] },
-    ]);
+    setGroups(initialGroupsForMode(activeMode));
     setPools(initialPoolsForMode(activeMode));
     setCustomTeamToPoolId(getOriginalTeamToPoolMap(activeMode));
   };
